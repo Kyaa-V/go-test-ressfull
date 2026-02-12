@@ -2,13 +2,19 @@ package application
 
 import (
 	"database/sql"
-	_ "github.com/go-sql-driver/mysql"
 	"fmt"
-	"time"
 	"log"
+	"module/portofolio1/database/migrations"
+	"time"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 var DB *sql.DB
+
+type DatabaseConfig struct {
+	*sql.DB
+}
 
 func NewConnection() error{
 	dsn := "root:rootpassword@tcp(127.0.0.1:3306)/mydatabase"
@@ -32,5 +38,15 @@ func NewConnection() error{
 	}
 
 	log.Println("Koneksi ke MySQL berhasil!")
+	return nil
+}
+
+func CreateTable(db *DatabaseConfig)error {
+	for _, query := range migrations.AllMigrations {
+		if _,err := db.Exec(query); err != nil {
+			fmt.Println("Gagal membuat tabel:", err)
+			return err
+		}
+	}
 	return nil
 }

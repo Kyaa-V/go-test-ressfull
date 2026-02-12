@@ -3,15 +3,20 @@ package main
 import (
 	"module/portofolio1/application"
 	"module/portofolio1/controller"
+	"module/portofolio1/opentelemitry"
 	"module/portofolio1/repository"
 	"module/portofolio1/service"
 )
 
 func main() {
 	db := application.NewConnection()
+	application.CreateTable(&application.DatabaseConfig{DB: application.DB})
 	if db != nil {
 		panic("Tidak dapat koneksi ke database")
 	}
+
+	shutdown := opentelemitry.InitOpenTelemetry()
+	defer shutdown()
 
 	authRepo := repository.NewAuthrepository(application.DB)
 	authService := service.NewAuthService(authRepo)

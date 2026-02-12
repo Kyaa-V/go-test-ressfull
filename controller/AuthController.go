@@ -3,11 +3,16 @@ package controller
 import (
 	"encoding/json"
 	"fmt"
-	"module/portofolio1/error"
+	"module/portofolio1/errors"
 	"module/portofolio1/model"
 	"module/portofolio1/resources"
 	"module/portofolio1/service"
 	"net/http"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Auth struct {
@@ -27,10 +32,7 @@ func (ac *Auth) Login(w http.ResponseWriter, r *http.Request) {
 
 	service, err := ac.service.Login(model.Login{Email: email, Password: password})
 
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	fmt.Println("err from service",err)
 
 	fmt.Println("Service Login:", service)
 	w.Header().Set("Content-Type", "application/json")
@@ -40,18 +42,46 @@ func (ac *Auth) Login(w http.ResponseWriter, r *http.Request) {
 
 }
 
+
+// @title Swagger Example API
+// @version 1.0
+// @description This is a sample server Petstore server.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host petstore.swagger.io
+// @BasePath /v2
+
 func (ac *Auth) SignIn(w http.ResponseWriter, r *http.Request) {
+
+	tracer := otel.Tracer("auth-controller")
+
+	ctx, span := tracer.Start(r.Context(), "SignIn-Controller" )
+	defer span.End()
+
+	start := time.Now()
+
 	fmt.Println("sign in controller")
 
 	var req model.SignIn
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		error.BadRequest(w, "Invalid request payload", nil)
+		errors.BadRequest(w, "Invalid request payload", nil)
 		return
 	}
 
 	r.Body.Close()
+
+	span.SetAttributes(
+		attribute.String("email", req.Email),
+	)
 
 	fmt.Println("Email:", req.Email)
 	fmt.Println("username:", req.Username)
@@ -63,7 +93,22 @@ func (ac *Auth) SignIn(w http.ResponseWriter, r *http.Request) {
 		Password: req.Password,
 	}
 
-	service, err := ac.service.Create(user)
+	service, err := ac.service.Create(ctx, user)
+
+	duration := time.Since(start)
+
+	span.SetAttributes(
+		attribute.Float64("duration_ms", float64(duration)),
+	)
+
+	fmt.Println(err)
+
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		errors.BadRequest(w, "Validation Error", err)
+		return
+	}
 
 	fmt.Println("data service dari controller: ",service)
 	resources.Success(w, "User registered successfully", user)

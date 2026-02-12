@@ -1,15 +1,17 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"module/portofolio1/model"
 
 	_ "github.com/go-sql-driver/mysql"
+	"go.opentelemetry.io/otel"
 )
 
 type Authrepository interface {
-	Create(user model.SignIn) (model.SignIn, error)
+	Create(ctx context.Context,user model.SignIn) (model.SignIn, error)
 	FindByEmail(user model.Login) (model.Login, error)
 	Login(data model.Login) (model.Login, error)
 }
@@ -36,12 +38,22 @@ func (a *AuthDB) Login(data model.Login) (model.Login, error) {
 	return result, nil
 }
 
-func (a *AuthDB) Create(user model.SignIn) (model.SignIn, error) {
-	query := "INSERT INTO users (email, password) VALUES (?, ?)"
-	_, err := a.DB.Exec(query, user.Email, user.Password)
+func (a *AuthDB) Create(ctx context.Context, user model.SignIn) (model.SignIn, error) {
+	tracer := otel.Tracer("auth-repository")
+	meter := otel.Meter("repo-meter")
+
+	requestCounter, _ := meter.Int64Counter("https_request_total")
+
+	_, span := tracer.Start(ctx, "repository(Create)")
+	defer span.End()
+
+	query := "INSERT INTO users (username,email, password) VALUES (?, ?, ?)"
+	_, err := a.DB.Exec(query, user.Username, user.Email, user.Password)
 	if err != nil {
+		span.RecordError(err)
 		return model.SignIn{}, err
 	}
+	requestCounter.Add(ctx, 1, )
 	return user, nil
 }
 
